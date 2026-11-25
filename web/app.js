@@ -14,7 +14,8 @@ function art(m) {
   const [a, b] = PALETTE[m.genres[0]] || ["#ffb547", "#2a1a08"];
   const c = (PALETTE[m.genres[1]] || [b])[0];
   const ang = hash(m.id) % 180;
-  return `background:radial-gradient(120% 80% at ${20 + (m.id % 60)}% 0%, ${a}, transparent 60%),
+  const tilt = (hash(m.id * 7) % 70) - 35;
+  return `filter:hue-rotate(${tilt}deg) saturate(1.1);background:radial-gradient(120% 80% at ${20 + (m.id % 60)}% 0%, ${a}, transparent 60%),
     linear-gradient(${ang}deg, ${b}, ${c}55 70%, ${b})`;
 }
 function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
@@ -85,11 +86,11 @@ function showResults(data, title) {
     wrap.insertAdjacentHTML("beforeend", `<div class="why">${why}</div><div class="tags">${tags}<span class="tag">genre ${(m.genre_affinity * 100).toFixed(0)}%</span></div>`);
     g.appendChild(wrap);
   });
-  $("#results").scrollIntoView({ behavior: "smooth", block: "start" });
+  if (!new URLSearchParams(location.search).has("shot")) $("#results").scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 async function recommend() {
-  const body = { liked: [...picks.keys()], k: 12 };
+  const body = { liked: [...picks.keys()], k: 10 };
   if ($("#age").value !== "") body.age = +$("#age").value;
   if ($("#gender").value !== "") body.gender = +$("#gender").value;
   const data = await api("/api/recommend", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -99,7 +100,7 @@ async function recommend() {
 
 async function randomViewer() {
   const { users } = await api("/api/users?n=1");
-  const data = await api(`/api/users/${users[0]}?k=12`);
+  const data = await api(`/api/users/${users[0]}?k=10`);
   showResults(data, `Up next for viewer #${data.user}`);
 }
 
@@ -121,7 +122,7 @@ async function loadStats() {
   const maxN = Math.max(...Object.values(R).map((r) => r["ndcg@10"]));
   const rows = Object.entries(R).map(([k, r]) => `<tr class="${r === best ? "best" : ""}"><td>${esc(k)}</td>` +
     cols.map((c) => c === "ndcg@10"
-      ? `<td><span class="bar" style="width:${(r[c] / maxN) * 80}px"></span>${r[c].toFixed(4)}</td>`
+      ? `<td><span class="meter" style="width:${(r[c] / maxN) * 80}px"></span>${r[c].toFixed(4)}</td>`
       : `<td>${c === "coverage@10" ? (r[c] * 100).toFixed(1) + "%" : r[c].toFixed(c === "novelty@10" ? 2 : 4)}</td>`).join("") + "</tr>").join("");
   $("#mtable").innerHTML = `<thead><tr><th>Model</th>${cols.map((c) => `<th>${c}</th>`).join("")}</tr></thead><tbody>${rows}</tbody>`;
 }
@@ -151,5 +152,7 @@ window.addEventListener("resize", bulbs);
   const seed2 = await api("/api/movies?q=toy story&limit=1");
   [...seed.results, ...seed2.results].forEach((m) => picks.set(m.id, m));
   renderStub(); syncGrid();
-  if (new URLSearchParams(location.search).has("demo")) recommend();
+  const qs = new URLSearchParams(location.search);
+  if (qs.has("demo")) recommend();
+  if (qs.has("viewer")) api(`/api/users/${qs.get("viewer")}?k=10`).then((d) => showResults(d, `Up next for viewer #${d.user}`));
 })();

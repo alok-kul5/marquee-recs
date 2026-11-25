@@ -93,8 +93,8 @@
     </div>
     <div class="flow">
       <div class="step"><span class="k">Input</span><h3>History + context</h3><p>Last 50 films, genre profile, age, gender, occupation, hour and weekday.</p></div>
-      <div class="step"><span class="k">Stage 1 · Retrieval</span><h3>Two-tower → HNSW</h3><p>PyTorch user and item towers trained with in-batch softmax and logQ correction. FAISS HNSW returns 150 films; ALS and trending add more.</p></div>
-      <div class="step"><span class="k">Stage 2 · Ranking</span><h3>LightGBM LambdaRank</h3><p>23 features per pair: retrieval scores, kNN and ALS affinity, freshness, popularity, genre match.</p></div>
+      <div class="step"><span class="k">Stage 1 · Retrieval</span><h3>Two-tower → HNSW</h3><p>PyTorch user and item towers trained with in-batch softmax and logQ correction. FAISS HNSW returns 150 films; ALS, item-kNN and trending add more.</p></div>
+      <div class="step"><span class="k">Stage 2 · Ranking</span><h3>LightGBM LambdaRank</h3><p>25 features per pair: retrieval scores, kNN and ALS affinity, freshness, popularity, genre match.</p></div>
       <div class="step"><span class="k">Output</span><h3>Top-K + reasons</h3><p>Seen films are filtered out, and each pick is tied to the liked film closest to it in embedding space.</p></div>
     </div>
   </section>
@@ -113,6 +113,6 @@
   <span>Marquee · data © GroupLens (MovieLens-1M), fetched at build time, never redistributed.</span>
   <span>Built by Alok Kulkarni</span>
 </footer>
-<script src="/static/app.js"></script>
+<script src="/static/app.js" charset="utf-8"></script>
 </body>
 </html>

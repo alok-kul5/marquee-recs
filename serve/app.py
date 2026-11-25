@@ -15,6 +15,8 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from marquee.data import pretty_title
+
 ROOT = Path(__file__).resolve().parent.parent
 ART = Path(os.environ.get("MARQUEE_ARTIFACTS", ROOT / "artifacts"))
 WEB = ROOT / "web"
@@ -33,7 +35,7 @@ def bundle():
         s = b["stack"]
         items = s.ds.items
         _state["catalog"] = [
-            {"id": int(r.item), "title": r.clean_title, "year": int(r.year), "genres": r.genre_list,
+            {"id": int(r.item), "title": pretty_title(r.title), "year": int(r.year), "genres": r.genre_list,
              "n": int(s.item_pop[r.item])}
             for r in items.itertuples()
         ]
@@ -95,6 +97,14 @@ def _recommend(liked: list[int], k: int, demo_u: int, key: int):
     with _lock:
         _lat.append(timing["total_ms"])
     return out, {k2: (round(v, 2) if isinstance(v, float) else v) for k2, v in timing.items()}
+
+
+@app.on_event("startup")
+def warm_up():
+    # load the bundle and run one request so the first visitor does not pay the cold start
+    if (ART / "bundle.pkl").exists():
+        _recommend([0, 1], 4, 0, key=-1)
+        _lat.clear()
 
 
 @app.get("/api/health")

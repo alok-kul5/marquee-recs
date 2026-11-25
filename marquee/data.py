@@ -45,6 +45,16 @@ def _read_dat(path: Path, names: list[str]) -> pd.DataFrame:
     return pd.read_csv(path, sep="::", engine="python", names=names, encoding="latin-1")
 
 
+def pretty_title(t: str) -> str:
+    """'Matrix, The (1999)' -> 'The Matrix'; also handles alternate titles in brackets."""
+    t = re.sub(r"\s*\(\d{4}\)\s*$", "", t)
+    m = re.match(r"^(.*), (The|A|An|Les|La|Le|L'|Il|Das|Der|Die|El)(\s*\(.*\))?$", t)
+    if m:
+        sep = "" if m.group(2).endswith("'") else " "
+        t = f"{m.group(2)}{sep}{m.group(1)}{m.group(3) or ''}"
+    return t
+
+
 @dataclass
 class Dataset:
     ratings: pd.DataFrame  # user, item, rating, ts (dense int ids)
@@ -75,7 +85,7 @@ def load(root: Path) -> Dataset:
 
     years = movies.title.str.extract(r"\((\d{4})\)\s*$")[0].astype(float)
     movies["year"] = years.fillna(years.median()).astype(int)
-    movies["clean_title"] = movies.title.map(lambda t: re.sub(r"\s*\(\d{4}\)\s*$", "", t))
+    movies["clean_title"] = movies.title.map(pretty_title)
     movies["genre_list"] = movies.genres.str.split("|")
     gvec = np.zeros((len(movies), len(GENRES)), dtype=np.float32)
     gidx = {g: k for k, g in enumerate(GENRES)}

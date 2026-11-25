@@ -185,7 +185,7 @@ th { font-family: var(--mono); font-size: 11px; text-transform: uppercase; lette
 tr:last-child td { border-bottom: 0; }
 tr.best td { background: rgba(255, 181, 71, .07); }
 tr.best td:first-child { color: var(--amber); font-weight: 700; }
-td .bar { display: inline-block; height: 6px; border-radius: 3px; background: var(--amber); margin-right: 8px; vertical-align: middle; opacity: .8; }
+td .meter { display: inline-block; height: 6px; border-radius: 3px; background: var(--amber); margin-right: 8px; vertical-align: middle; opacity: .8; }
 
 .foot { display: flex; justify-content: space-between; gap: 20px; flex-wrap: wrap; padding: 30px clamp(18px, 4vw, 56px);
   color: var(--dim); font-size: 13px; border-top: 1px solid rgba(255, 255, 255, .06); margin-top: 40px; }
