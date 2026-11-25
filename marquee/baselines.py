@@ -91,8 +91,10 @@ class ImplicitMF:
                                                      random_state=seed, use_gpu=False)
 
     def fit(self, X: sp.csr_matrix):
+        from threadpoolctl import threadpool_limits
         conf = X * self.alpha if self.kind == "als" else X
-        self.model.fit(conf.tocsr().astype(np.float32), show_progress=False)
+        with threadpool_limits(1, "blas"):
+            self.model.fit(conf.tocsr().astype(np.float32), show_progress=False)
         self.U = np.asarray(self.model.user_factors)
         self.V = np.asarray(self.model.item_factors)
         return self

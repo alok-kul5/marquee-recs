@@ -189,7 +189,7 @@ class CandidateStack:
             "user_gender": self.feat.gender[demo_u], "user_age": self.feat.age[demo_u],
             "user_occ": self.feat.occ[demo_u],
             "genre_affinity": aff, "year_gap": self.item_year[cand] - hy,
-            "ctx_hour": t.hour, "ctx_weekday": t.dayofweek,
+            "ctx_hour": t.hour, "ctx_weekday": t.day_of_week,
         })
 
 
