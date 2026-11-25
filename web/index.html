@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Marquee · two-stage movie recommender</title>
+<meta name="description" content="Pick a few films and watch a two-stage recommender (two-tower retrieval + LightGBM ranking) pick the next ones.">
+<link rel="icon" href="/static/mark.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800;900&family=Instrument+Serif:ital@0;1&family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+<header class="bar">
+  <a class="brand" href="#top"><img src="/static/mark.svg" alt="" width="30" height="30"><span>Marquee</span></a>
+  <nav>
+    <a href="#demo">Demo</a>
+    <a href="#how">How it works</a>
+    <a href="#metrics">Metrics</a>
+    <a class="gh" href="https://github.com/alok-kul5/marquee-recs" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+</header>
+
+<main id="top">
+  <section class="hero">
+    <div class="sign">
+      <div class="bulbs top"></div><div class="bulbs bottom"></div>
+      <div class="bulbs left"></div><div class="bulbs right"></div>
+      <p class="eyebrow">Now showing · MovieLens-1M · 1,000,209 ratings</p>
+      <h1><span>Pick three films.</span><span class="lit">We'll run the rest.</span></h1>
+    </div>
+    <p class="lede">A two-stage recommender built the way production systems are: a <em>two-tower</em> network
+      retrieves candidates from a FAISS HNSW index, then a <em>LightGBM LambdaRank</em> model re-orders them
+      with user, item and context features.</p>
+    <div class="chips" id="chips">
+      <div class="chip"><b id="c-lift">—</b><span>NDCG@10 vs popularity</span></div>
+      <div class="chip"><b id="c-p95">—</b><span>p95 API latency</span></div>
+      <div class="chip"><b id="c-cand">—</b><span>candidates per request</span></div>
+      <div class="chip"><b id="c-cat">—</b><span>films in the catalog</span></div>
+    </div>
+    <div class="cta">
+      <a class="btn primary" href="#demo">Start picking</a>
+      <button class="btn ghost" id="hero-random">Show me a real viewer</button>
+    </div>
+  </section>
+
+  <section class="demo" id="demo">
+    <div class="picker">
+      <div class="section-head">
+        <span class="num">01</span>
+        <h2>What have you loved?</h2>
+      </div>
+      <label class="search">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input id="q" type="search" placeholder="Search 3,883 films: Alien, Fargo, Toy Story…" autocomplete="off">
+      </label>
+      <div class="grid" id="pick-grid"></div>
+    </div>
+
+    <aside class="stub" id="stub">
+      <div class="stub-head">
+        <span>Admit one</span><span id="stub-count">0 picked</span>
+      </div>
+      <ol id="stub-list"></ol>
+      <p class="stub-empty" id="stub-empty">Tap a few posters. Zero picks works too: that's the cold-start path.</p>
+      <div class="demo-row">
+        <label>Age <select id="age">
+          <option value="">any</option><option value="0">under 18</option><option value="1">18–24</option>
+          <option value="2">25–34</option><option value="3">35–44</option><option value="4">45–49</option>
+          <option value="5">50–55</option><option value="6">56+</option></select></label>
+        <label>Gender <select id="gender"><option value="">any</option><option value="0">F</option><option value="1">M</option></select></label>
+      </div>
+      <button class="btn primary wide" id="go">Recommend</button>
+      <button class="btn link" id="clear">Clear picks</button>
+    </aside>
+  </section>
+
+  <section class="results" id="results" hidden>
+    <div class="section-head">
+      <span class="num">02</span>
+      <h2 id="res-title">Because you liked…</h2>
+    </div>
+    <div class="trace" id="trace"></div>
+    <div class="history" id="history" hidden></div>
+    <div class="rec-grid" id="rec-grid"></div>
+  </section>
+
+  <section class="how" id="how">
+    <div class="section-head">
+      <span class="num">03</span>
+      <h2>How a request flows</h2>
+    </div>
+    <div class="flow">
+      <div class="step"><span class="k">Input</span><h3>History + context</h3><p>Last 50 films, genre profile, age, gender, occupation, hour and weekday.</p></div>
+      <div class="step"><span class="k">Stage 1 · Retrieval</span><h3>Two-tower → HNSW</h3><p>PyTorch user and item towers trained with in-batch softmax and logQ correction. FAISS HNSW returns 150 films; ALS and trending add more.</p></div>
+      <div class="step"><span class="k">Stage 2 · Ranking</span><h3>LightGBM LambdaRank</h3><p>23 features per pair: retrieval scores, kNN and ALS affinity, freshness, popularity, genre match.</p></div>
+      <div class="step"><span class="k">Output</span><h3>Top-K + reasons</h3><p>Seen films are filtered out, and each pick is tied to the liked film closest to it in embedding space.</p></div>
+    </div>
+  </section>
+
+  <section class="metrics" id="metrics">
+    <div class="section-head">
+      <span class="num">04</span>
+      <h2>Offline results on a held-out future</h2>
+    </div>
+    <p class="note" id="split-note">Temporal split: the models only see the past.</p>
+    <div class="table-wrap"><table id="mtable"></table></div>
+  </section>
+</main>
+
+<footer class="foot">
+  <span>Marquee · data © GroupLens (MovieLens-1M), fetched at build time, never redistributed.</span>
+  <span>Built by Alok Kulkarni</span>
+</footer>
+<script src="/static/app.js"></script>
+</body>
+</html>

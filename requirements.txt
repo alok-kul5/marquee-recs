@@ -1,0 +1,12 @@
+numpy>=1.26
+pandas>=2.1
+scipy>=1.11
+lightgbm>=4.3
+faiss-cpu>=1.8
+implicit>=0.7.2
+fastapi>=0.110
+uvicorn[standard]>=0.29
+httpx>=0.27
+pytest>=8
+# torch: install the build for your machine, e.g. CUDA 12.8 for RTX 50xx (Blackwell):
+#   pip install torch --index-url https://download.pytorch.org/whl/cu128
