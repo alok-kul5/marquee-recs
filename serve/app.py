@@ -85,7 +85,7 @@ def _recommend(liked: list[int], k: int, demo_u: int, key: int):
             because = {"id": int(liked[j]), "title": st["catalog"][liked[j]]["title"],
                        "similarity": round(float(sims[j]), 3)}
         r = row.loc[i]
-        srcs = [n for n, c in (("two-tower", "src_tt"), ("ALS", "src_als"), ("trending", "src_pop")) if r[c] > 0]
+        srcs = [n for n, c in (("two-tower", "src_tt"), ("ALS", "src_als"), ("item-kNN", "src_knn"), ("trending", "src_pop")) if r[c] > 0]
         out.append(movie(int(i), {"rank": rank + 1, "because": because, "sources": srcs,
                                   "retrieval_score": round(float(r.tt_score), 3),
                                   "genre_affinity": round(float(r.genre_affinity), 3)}))

@@ -11,10 +11,10 @@ from .two_tower import (AnnIndex, Featurizer, TowerConfig, item_embeddings, trai
                         user_embeddings)
 
 DAY = 86_400
-N_TT, N_ALS, N_POP = 150, 50, 20
+N_TT, N_ALS, N_KNN, N_POP = 150, 50, 50, 100
 
 FEATURES = [
-    "tt_score", "tt_rank", "als_score", "knn_score", "src_tt", "src_als", "src_pop",
+    "tt_score", "tt_rank", "als_score", "knn_score", "src_tt", "src_als", "src_pop", "src_knn", "pop_rank",
     "item_pop_log", "item_recent_log", "item_avg_rating", "item_n_ratings_log", "item_age_years",
     "item_days_on_site", "user_n_log", "user_avg_rating", "user_days_since_last", "user_gender",
     "user_age", "user_occ", "genre_affinity", "year_gap", "ctx_hour", "ctx_weekday",
@@ -66,6 +66,8 @@ class CandidateStack:
         self.item_year = ds.items.year.to_numpy()
         self.genres = np.stack(ds.items.genre_vec.to_numpy())
         self.pop_order = np.argsort(-self.pop.scores)
+        self.pop_rank = np.empty(n_i)
+        self.pop_rank[self.pop_order] = np.arange(n_i)
 
     # FAISS indexes are not picklable: drop it and rebuild from the vectors on load
     def __getstate__(self):
@@ -108,51 +110,46 @@ class CandidateStack:
         for r, u in enumerate(users):
             h = hists[r]
             seen = set(h)
+            # meta columns: tt_score, tt_rank, src_tt, src_als, src_pop, src_knn
             src: dict[int, list] = {}
-            rank = 0
+
+            def add(order, col, limit):
+                n_added = 0
+                for i in order:
+                    i = int(i)
+                    if i < 0 or i in seen:
+                        continue
+                    if i not in src:
+                        src[i] = [np.nan, N_TT, 0, 0, 0, 0]
+                    src[i][col] = 1
+                    n_added += 1
+                    if n_added >= limit:
+                        break
+
+            tt_rank = 0
             for d, i in zip(D[r], I[r]):
                 if i < 0 or i in seen:
                     continue
-                src[int(i)] = [float(d), rank, 1, 0, 0]
-                rank += 1
-                if rank >= N_TT:
+                src[int(i)] = [float(d), tt_rank, 1, 0, 0, 0]
+                tt_rank += 1
+                if tt_rank >= N_TT:
                     break
             if h:
-                als_u = self._als_vector(h, u)
-                als_s = self.als.V @ als_u
-                order = np.argsort(-als_s)
-                added = 0
-                for i in order:
-                    if i in seen:
-                        continue
-                    if int(i) in src:
-                        src[int(i)][3] = 1
-                    else:
-                        src[int(i)] = [np.nan, N_TT, 0, 1, 0]
-                    added += 1
-                    if added >= N_ALS:
-                        break
+                als_s = self.als.V @ self._als_vector(h, u)
+                add(np.argsort(-als_s), 3, N_ALS)
+                knn_all = self.knn.score_items(h)
+                add(np.argsort(-knn_all), 5, N_KNN)
             else:
                 als_s = np.zeros(self.ds.n_items)
-            added = 0
-            for i in self.pop_order:
-                if i in seen:
-                    continue
-                if int(i) in src:
-                    src[int(i)][4] = 1
-                else:
-                    src[int(i)] = [np.nan, N_TT, 0, 0, 1]
-                added += 1
-                if added >= N_POP:
-                    break
+                knn_all = np.zeros(self.ds.n_items)
+            add(self.pop_order, 4, N_POP)
             cand = np.fromiter(src.keys(), dtype=np.int64)
             meta = np.array(list(src.values()), dtype=np.float64)
             # fill missing two-tower scores exactly (cheap dot product)
             miss = np.isnan(meta[:, 0])
             if miss.any():
                 meta[miss, 0] = self.item_vecs[cand[miss]] @ q[r]
-            knn_s = self.knn.score_items(h)[cand] if h else np.zeros(len(cand))
-            rows.append(self._features(u, demo_users[r], h, cand, meta, als_s[cand], knn_s,
+            rows.append(self._features(u, demo_users[r], h, cand, meta, als_s[cand], knn_all[cand],
                                        (ctx_ts or {}).get(u, self.cutoff)))
         return pd.concat(rows, ignore_index=True) if rows else pd.DataFrame(columns=["user", "item"] + FEATURES)
 
@@ -176,7 +173,8 @@ class CandidateStack:
         return pd.DataFrame({
             "user": u, "item": cand,
             "tt_score": meta[:, 0], "tt_rank": meta[:, 1], "als_score": als_s, "knn_score": knn_s,
-            "src_tt": meta[:, 2], "src_als": meta[:, 3], "src_pop": meta[:, 4],
+            "src_tt": meta[:, 2], "src_als": meta[:, 3], "src_pop": meta[:, 4], "src_knn": meta[:, 5],
+            "pop_rank": self.pop_rank[cand],
             "item_pop_log": np.log1p(self.item_pop[cand]),
             "item_recent_log": np.log1p(self.item_recent[cand]),
             "item_avg_rating": self.item_avg[cand],

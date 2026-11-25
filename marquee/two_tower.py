@@ -36,6 +36,7 @@ class TowerConfig:
     batch_size: int = 2048
     lr: float = 2e-3
     weight_decay: float = 1e-6
+    logq_weight: float = 2.0  # >1 keeps a popularity prior (tuned on the val window)
     seed: int = 0
 
 
@@ -153,7 +154,8 @@ def train_two_tower(train: pd.DataFrame, feat: Featurizer, cfg: TowerConfig = To
     gender = torch.tensor(feat.gender, device=device)
     age = torch.tensor(feat.age, device=device)
     occ = torch.tensor(feat.occ, device=device)
-    H_t = torch.tensor(H, dtype=torch.long, device=device)
+    H_t = torch.from_numpy(H).to(device)  # int32 on device; cast per batch
+    del H
     users_t = torch.tensor(users, device=device)
     items_t = torch.tensor(items, device=device)
 
@@ -163,10 +165,10 @@ def train_two_tower(train: pd.DataFrame, feat: Featurizer, cfg: TowerConfig = To
     model.train()
     for ep in range(cfg.epochs):
         t0, tot = time.time(), 0.0
-        perm = torch.tensor(rng.permutation(n), device=device)
+        perm = torch.randperm(n, device=device)
         for s in range(0, n, cfg.batch_size):
             b = perm[s:s + cfg.batch_size]
-            u, it, h = users_t[b], items_t[b], H_t[b]
+            u, it, h = users_t[b], items_t[b], H_t[b].long()
             # randomly truncate histories so the model also learns short / empty ones (cold start)
             keep = torch.randint(0, HIST_LEN + 1, (len(b), 1), device=device)
             pos = torch.arange(HIST_LEN, device=device).view(1, -1)
@@ -176,7 +178,7 @@ def train_two_tower(train: pd.DataFrame, feat: Featurizer, cfg: TowerConfig = To
             drop = torch.rand(len(b), device=device) < cfg.id_dropout
             ids = torch.where(drop, torch.zeros_like(ids), ids)
             ie = model.item(ids, genres[it], years[it])
-            logits = ue @ ie.T / cfg.temperature - logq[it].view(1, -1)
+            logits = ue @ ie.T / cfg.temperature - cfg.logq_weight * logq[it].view(1, -1)
             same = it.view(-1, 1) == it.view(1, -1)
             eye = torch.eye(len(b), dtype=torch.bool, device=device)
             logits = logits.masked_fill(same & ~eye, float("-inf"))

@@ -9,6 +9,7 @@ Protocol (no leakage):
 from __future__ import annotations
 
 import argparse
+import gc
 import json
 import pickle
 import time
@@ -16,6 +17,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import torch
 
 from . import data as D
 from .baselines import recommend_all
@@ -35,6 +37,7 @@ def main(argv=None):
     ap.add_argument("--data", default=None, help="folder with ratings.dat/users.dat/movies.dat")
     ap.add_argument("--synthetic", action="store_true", help="use a tiny generated dataset (CI)")
     ap.add_argument("--epochs", type=int, default=6)
+    ap.add_argument("--no-extra-window", dest="extra_window", action="store_false")
     ap.add_argument("--out", default=str(ROOT / "artifacts"))
     a = ap.parse_args(argv)
 
@@ -70,6 +73,23 @@ def main(argv=None):
     ytr, yes = label(tr, val_truth), label(es, val_truth)
     cand_recall = ytr.sum() / sum(len(val_truth[u]) for u in tr_u)
     print(f"ranker train rows {len(tr):,} (positives {ytr.sum():,}); candidate recall {cand_recall:.3f}")
+    if a.extra_window:
+        # a second, earlier labelled window (all inside TRAIN) doubles the ranker's examples
+        del A
+        gc.collect()
+        t_a = int(np.quantile(sp.train.ts, 0.875))
+        early, late = sp.train[sp.train.ts < t_a], sp.train[sp.train.ts >= t_a]
+        A0 = CandidateStack(ds, early, t_a, cfg, fit_bpr=False, log=lambda *_: None)
+        tr0_truth = D.targets(early, late)
+        u0 = sorted(u for u in tr0_truth if u in A0.hist)
+        tr0 = A0.candidates(u0, first_ts(late))
+        y0 = label(tr0, tr0_truth)
+        tr0["user"] += 1_000_000  # separate query groups from the val window
+        print(f"extra window from {fmt(t_a)}: {len(tr0):,} rows (positives {y0.sum():,})")
+        tr = pd.concat([tr, tr0], ignore_index=True)
+        ytr = np.concatenate([ytr, y0])
+        del A0
+        gc.collect()
     # drop users without a single positive candidate: they carry no ranking signal
     pos_users = set(tr.user[ytr == 1])
     keep = tr.user.isin(pos_users).to_numpy()
@@ -78,6 +98,13 @@ def main(argv=None):
     timings["ranker_fit_s"] = time.time() - t0
     imp = ranker.importance()
     print("top features:", ", ".join(f"{k}" for k in imp.index[:8]))
+
+    # free stage A before refitting (keeps peak memory low on small machines)
+    del tr, es
+    A = None
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
 
     # ---------------- stage B ----------------
     hist_b = pd.concat([sp.train, sp.val], ignore_index=True)

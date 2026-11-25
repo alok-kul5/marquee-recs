@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import io
 import re
+import ssl
 import urllib.request
 import zipfile
 from dataclasses import dataclass
@@ -28,7 +29,12 @@ def fetch_ml1m(dest: Path = DATA_DIR) -> Path:
         return target
     dest.mkdir(parents=True, exist_ok=True)
     print(f"downloading {ML1M_URL}")
-    with urllib.request.urlopen(ML1M_URL) as resp:
+    try:  # use certifi's CA bundle when available (some Windows Pythons lack the chain)
+        import certifi
+        ctx = ssl.create_default_context(cafile=certifi.where())
+    except ImportError:
+        ctx = ssl.create_default_context()
+    with urllib.request.urlopen(ML1M_URL, context=ctx) as resp:
         blob = resp.read()
     with zipfile.ZipFile(io.BytesIO(blob)) as zf:
         zf.extractall(dest)
